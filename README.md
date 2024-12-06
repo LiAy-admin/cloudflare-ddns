@@ -1,5 +1,7 @@
-# Cloudflare DDNS 更新脚本
 
+
+# Cloudflare DDNS 更新脚本
+将动态IP解析到 cloudflare 的域名上
 这是一个用于自动更新 Cloudflare DNS 记录的 Shell 脚本，支持动态 IP 地址更新。
 
 ## 一键安装
