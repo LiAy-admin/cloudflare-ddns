@@ -1,33 +1,27 @@
-
-
 # Cloudflare DDNS 更新脚本
-将动态IP解析到 cloudflare 的域名上
-这是一个用于自动更新 Cloudflare DNS 记录的 Shell 脚本，支持动态 IP 地址更新。
+
+将动态IP解析到 Cloudflare 的域名上，这是一个用于自动更新 Cloudflare DNS 记录的 Shell 脚本，支持动态 IP 地址更新。
 
 ## 一键安装
 
 ```bash
-wget -O- https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/install.sh | sudo bash
+wget -O- https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/cloudflare-ddns.sh | sudo bash -s install
 ```
+
 ## 国内加速一键安装
 
 ```bash
-wget -O- https://ghp.ci/https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/install.sh | sudo bash
+wget -O- https://ghp.ci/https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/cloudflare-ddns.sh | sudo bash -s install
 ```
 
-安装完成后，直接运行：
-```bash
-cloudflare-ddns
-```
-
-## 快速开始
+## 手动安装
 
 1. 下载脚本：
 ```bash
 wget https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/cloudflare-ddns.sh
 ```
 
-1. 国内加速下载脚本：
+   国内加速下载：
 ```bash
 wget https://ghp.ci/https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/cloudflare-ddns.sh
 ```
@@ -37,20 +31,16 @@ wget https://ghp.ci/https://github.com/LiAy-admin/cloudflare-ddns/releases/downl
 chmod +x cloudflare-ddns.sh
 ```
 
-3. 运行脚本：
+3. 安装服务：
 ```bash
-./cloudflare-ddns.sh
+sudo ./cloudflare-ddns.sh install
 ```
 
-## 首次安装配置
+## 使用方法
 
-1. 在管理工具中选择 "1" 进行安装
-2. 按提示依次输入以下信息：
-   - Cloudflare 邮箱
-   - Global API Key
-   - 域名（例如：example.com）
-   - 子域名（例如：ddns.example.com）
-3. 选择是否立即启用定时更新
+安装完成后，可以：
+1. 直接运行命令：`cloudflare-ddns`
+2. 或运行原始脚本：`/usr/local/cloudflare-ddns/cloudflare-ddns.sh`
 
 ## Cloudflare 配置获取
 
@@ -62,10 +52,10 @@ chmod +x cloudflare-ddns.sh
 3. 确认域名已添加到 Cloudflare
 4. 在 DNS 设置中添加 A 记录（如果还没有）
 
-## 管理工具使用
+## 功能说明
 
 脚本提供以下功能：
-- 选项 1：安装 DDNS 服务
+- 选项 1：安装/重新配置 DDNS 服务
 - 选项 2：启用定时更新（每5分钟）
 - 选项 3：禁用定时更新
 - 选项 4：立即更新 DNS
@@ -76,20 +66,14 @@ chmod +x cloudflare-ddns.sh
 
 ## 常见问题
 
-1. 权限问题：
-```bash
-# 确保脚本有执行权限
-chmod +x cloudflare-ddns.sh
-```
-
-2. 依赖安装：
+1. 依赖安装：
 ```bash
 # 安装必要的工具
 apt update
 apt install curl jq -y
 ```
 
-3. 日志查看：
+2. 日志查看：
 ```bash
 # 查看实时日志
 tail -f /var/log/syslog | grep cloudflare-ddns
@@ -97,7 +81,7 @@ tail -f /var/log/syslog | grep cloudflare-ddns
 
 ## 项目地址
 
-- [GitCode 仓库](https://github.com/LiAy-admin/cloudflare-ddns)
+- [GitHub 仓库](https://github.com/LiAy-admin/cloudflare-ddns)
 
 ## 安全建议
 
