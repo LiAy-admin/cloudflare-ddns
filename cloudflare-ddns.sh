@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 添加日志功能
-exec 1> >(logger -s -t $(basename $0)) 2>&1
+exec 1> >(logger -s -t $(basename $0) -p user.notice) 2>&1
 
 SCRIPT_PATH="/usr/local/cloudflare-ddns/cloudflare-ddns.sh"
 CRON_JOB="*/5 * * * * $SCRIPT_PATH"
@@ -22,26 +22,55 @@ show_menu() {
 
 # 安装服务
 install_service() {
+    # 检查必要的命令是否存在
+    for cmd in curl jq; do
+        if ! command -v $cmd >/dev/null 2>&1; then
+            echo "错误：未找到命令 $cmd，正在安装..."
+            apt-get update >/dev/null 2>&1
+            apt-get install -y $cmd >/dev/null 2>&1
+        fi
+    done
+
     # 安装依赖
-    apt update
-    apt install -y curl jq
+    echo "正在检查依赖..."
+    apt-get update >/dev/null 2>&1
+    apt-get install -y curl jq >/dev/null 2>&1
 
     # 创建目录
     mkdir -p /usr/local/cloudflare-ddns
 
     # 获取用户配置
     echo "=== Cloudflare 配置设置 ==="
-    read -p "请输入 Cloudflare 邮箱: " cf_email
-    read -p "请输入 Global API Key: " cf_key
-    read -p "请输入域名 (例如: example.com): " cf_zone
-    read -p "请输入子域名 (例如: ddns.example.com): " cf_record
+    # 添加输入验证
+    while [ -z "$cf_email" ]; do
+        read -p "请输入 Cloudflare 邮箱: " cf_email
+    done
+    while [ -z "$cf_key" ]; do
+        read -p "请输入 Global API Key: " cf_key
+    done
+    while [ -z "$cf_zone" ]; do
+        read -p "请输入域名 (例如: example.com): " cf_zone
+    done
+    while [ -z "$cf_record" ]; do
+        read -p "请输入子域名 (例如: ddns.example.com): " cf_record
+    done
+
+    # 创建配置文件前先验证 API 信息
+    echo "正在验证 Cloudflare 配置..."
+    if ! curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+        -H "X-Auth-Email: $cf_email" \
+        -H "X-Auth-Key: $cf_key" \
+        -H "Content-Type: application/json" | jq -e '.success' >/dev/null; then
+        echo "错误：Cloudflare 验证失败，请检查邮箱和 API Key"
+        exit 1
+    fi
 
     # 创建配置文件
     cat > $SCRIPT_PATH << EOF
 #!/bin/bash
 
 # 添加日志功能
-exec 1> >(logger -s -t \$(basename \$0)) 2>&1
+exec 1> >(logger -s -t \$(basename \$0) -p user.notice) 2>&1
 
 # Cloudflare 配置
 AUTH_EMAIL="$cf_email"
@@ -79,7 +108,7 @@ RECORD_ID=\$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/\$ZONE_I
      -H "X-Auth-Key: \$AUTH_KEY" \\
      -H "Content-Type: application/json" | jq -r '.result[0].id')
 
-# 检查记录ID是否获取成功
+# 检查记录ID否获取成功
 if [ -z "\$RECORD_ID" ] || [ "\$RECORD_ID" = "null" ]; then
     echo "错误: 无法获取记录ID，请检查子域名是否正确"
     exit 1
