@@ -1,236 +1,236 @@
 #!/bin/bash
 
-# 添加日志功能
-exec 1> >(logger -s -t $(basename $0) -p user.notice) 2>&1
+# 定义常量
+readonly VERSION="1.0.0"
+readonly INSTALL_DIR="/usr/local/cloudflare-ddns"
+readonly CONFIG_FILE="$INSTALL_DIR/config"
+readonly SCRIPT_PATH="$INSTALL_DIR/cloudflare-ddns.sh"
+readonly LOCK_FILE="/tmp/cloudflare-ddns.lock"
+readonly CRON_JOB="*/5 * * * * $SCRIPT_PATH update"
 
-SCRIPT_PATH="/usr/local/cloudflare-ddns/cloudflare-ddns.sh"
-CRON_JOB="*/5 * * * * $SCRIPT_PATH"
-
-# 显示菜单
-show_menu() {
-    echo "=== Cloudflare DDNS 管理工具 ==="
-    echo "1. 安装 DDNS 服务"
-    echo "2. 启用定时更新"
-    echo "3. 禁用定时更新"
-    echo "4. 立即更新 DNS"
-    echo "5. 查看运行状态"
-    echo "6. 查看日志"
-    echo "7. 卸载 DDNS 服务"
-    echo "0. 退出"
-    echo "=========================="
+# 日志函数
+log() {
+    echo "$1"
+    logger -t $(basename $0) -p user.notice "$1"
 }
 
-# 安装服务
-install_service() {
-    # 检查必要的命令是否存在
-    for cmd in curl jq; do
-        if ! command -v $cmd >/dev/null 2>&1; then
-            echo "错误：未找到命令 $cmd，正在安装..."
+error() {
+    log "错误：$1"
+    exit 1
+}
+
+# 基础检查函数
+check_root() {
+    [[ $(id -u) != "0" ]] && error "请使用 root 权限运行此脚本"
+}
+
+check_network() {
+    ping -c 1 cloudflare.com >/dev/null 2>&1 || error "无法连接到 Cloudflare"
+}
+
+check_deps() {
+    local deps=(curl jq wget)
+    for cmd in "${deps[@]}"; do
+        command -v $cmd >/dev/null 2>&1 || {
+            log "正在安装 $cmd..."
             apt-get update >/dev/null 2>&1
             apt-get install -y $cmd >/dev/null 2>&1
-        fi
+        }
     done
+}
 
-    # 安装依赖
-    echo "正在检查依赖..."
-    apt-get update >/dev/null 2>&1
-    apt-get install -y curl jq >/dev/null 2>&1
+# 配置管理
+load_config() {
+    [[ -f "$CONFIG_FILE" ]] || error "配置文件不存在，请先运行安装"
+    source "$CONFIG_FILE"
+}
 
-    # 创建目录
-    mkdir -p /usr/local/cloudflare-ddns
+validate_config() {
+    local required=("AUTH_EMAIL" "AUTH_KEY" "ZONE_NAME" "RECORD_NAME")
+    for var in "${required[@]}"; do
+        [[ -z "${!var}" ]] && error "$var 未配置"
+    done
+}
 
-    # 获取用户配置
-    echo "=== Cloudflare 配置设置 ==="
-    # 添加输入验证
-    while [ -z "$cf_email" ]; do
-        read -p "请输入 Cloudflare 邮箱: " cf_email
-    done
-    while [ -z "$cf_key" ]; do
-        read -p "请输入 Global API Key: " cf_key
-    done
-    while [ -z "$cf_zone" ]; do
-        read -p "请输入域名 (例如: example.com): " cf_zone
-    done
-    while [ -z "$cf_record" ]; do
-        read -p "请输入子域名 (例如: ddns.example.com): " cf_record
-    done
+save_config() {
+    cat > "$CONFIG_FILE" << EOF
+AUTH_EMAIL="$1"
+AUTH_KEY="$2"
+ZONE_NAME="$3"
+RECORD_NAME="$4"
+EOF
+    chmod 600 "$CONFIG_FILE"
+}
 
-    # 创建配置文件前先验证 API 信息
-    echo "正在验证 Cloudflare 配置..."
-    if ! curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
-        -H "X-Auth-Email: $cf_email" \
-        -H "X-Auth-Key: $cf_key" \
-        -H "Content-Type: application/json" | jq -e '.success' >/dev/null; then
-        echo "错误：Cloudflare 验证失败，请检查邮箱和 API Key"
-        exit 1
+# 安装函数
+do_install() {
+    check_root
+    check_deps
+    
+    # 检查是否通过管道运行
+    if [ ! -t 0 ]; then
+        # 如果是通过管道运行，先保存脚本
+        cat > "$SCRIPT_PATH"
+        chmod 700 "$SCRIPT_PATH"
+        log "脚本已下载到 $SCRIPT_PATH"
+        log "请运行以下命令继续安装："
+        log "sudo $SCRIPT_PATH install"
+        exit 0
     fi
-
-    # 创建配置文件
-    cat > $SCRIPT_PATH << EOF
-#!/bin/bash
-
-# 添加日志功能
-exec 1> >(logger -s -t \$(basename \$0) -p user.notice) 2>&1
-
-# Cloudflare 配置
-AUTH_EMAIL="$cf_email"
-AUTH_KEY="$cf_key"
-ZONE_NAME="$cf_zone"
-RECORD_NAME="$cf_record"
-
-# 获取当前公网IP
-IP=\$(curl -s http://ipv4.icanhazip.com)
-
-# 检查IP是否获取成功
-if [ -z "\$IP" ]; then
-    echo "错误: 无法获取公网IP地址"
-    exit 1
-fi
-
-echo "当前公网IP: \$IP"
-
-# 获取域名和记录的ID
-ZONE_ID=\$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=\$ZONE_NAME" \\
-     -H "X-Auth-Email: \$AUTH_EMAIL" \\
-     -H "X-Auth-Key: \$AUTH_KEY" \\
-     -H "Content-Type: application/json" | jq -r '.result[0].id')
-
-# 检查域名ID是否获取成功
-if [ -z "\$ZONE_ID" ] || [ "\$ZONE_ID" = "null" ]; then
-    echo "错误: 无法获取域名ID，请检查域名和API密钥是否正确"
-    exit 1
-fi
-
-echo "域名ID: \$ZONE_ID"
-
-RECORD_ID=\$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/\$ZONE_ID/dns_records?name=\$RECORD_NAME" \\
-     -H "X-Auth-Email: \$AUTH_EMAIL" \\
-     -H "X-Auth-Key: \$AUTH_KEY" \\
-     -H "Content-Type: application/json" | jq -r '.result[0].id')
-
-# 检查记录ID否获取成功
-if [ -z "\$RECORD_ID" ] || [ "\$RECORD_ID" = "null" ]; then
-    echo "错误: 无法获取记录ID，请检查子域名是否正确"
-    exit 1
-fi
-
-echo "记录ID: \$RECORD_ID"
+    
+    # 正常安装流程...
+    mkdir -p "$INSTALL_DIR"
+    
+    # 获取配置
+    log "=== Cloudflare DDNS 配置 ==="
+    local email key zone record
+    
+    while [[ -z "$email" ]]; do
+        read -p "请输入 Cloudflare 邮箱: " email
+    done
+    
+    while [[ -z "$key" ]]; do
+        read -p "请输入 Global API Key: " key
+    done
+    
+    while [[ -z "$zone" ]]; do
+        read -p "请输入域名 (example.com): " zone
+    done
+    
+    while [[ -z "$record" ]]; do
+        read -p "请输入子域名 (ddns.example.com): " record
+    done
+    
+    # 验证配置
+    log "正在验证配置..."
+    local verify_result=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$zone" \
+        -H "X-Auth-Email: $email" \
+        -H "X-Auth-Key: $key" \
+        -H "Content-Type: application/json")
+    
+    if ! echo "$verify_result" | jq -e '.success' >/dev/null; then
+        error "验证失败: 请检查邮箱和 API Key 是否正确"
+        error "API 返回: $(echo "$verify_result" | jq -r '.errors[0].message')"
+    fi
+    
+    log "验证成功！"
+    
+    # 保存配置
+    save_config "$email" "$key" "$zone" "$record"
+    
+    # 复制脚本
+    cp "$0" "$SCRIPT_PATH"
+    chmod 700 "$SCRIPT_PATH"
+    ln -sf "$SCRIPT_PATH" /usr/local/bin/cloudflare-ddns
+    
+    log "安装完成！"
+    
+    # 询问是否用自动更新
+    read -p "是否启用自动更新(每5分钟)？[y/N] " -n 1 -r
+    echo
+    [[ $REPLY =~ ^[Yy]$ ]] && enable_cron
+}
 
 # 更新DNS记录
-UPDATE_RESULT=\$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/\$ZONE_ID/dns_records/\$RECORD_ID" \\
-     -H "X-Auth-Email: \$AUTH_EMAIL" \\
-     -H "X-Auth-Key: \$AUTH_KEY" \\
-     -H "Content-Type: application/json" \\
-     --data "{\"type\":\"A\",\"name\":\"\$RECORD_NAME\",\"content\":\"\$IP\",\"ttl\":1,\"proxied\":false}")
-
-# 检查更新是否成功
-if echo "\$UPDATE_RESULT" | jq -e '.success' >/dev/null; then
-    echo "DNS记录更新成功: \$RECORD_NAME -> \$IP"
-else
-    echo "错误: DNS记录更新失败"
-    echo "错误信息: \$(echo "\$UPDATE_RESULT" | jq -r '.errors[0].message')"
-    exit 1
-fi
-EOF
-
-    # 设置权限
-    chmod 700 $SCRIPT_PATH
-
-    echo "DDNS 服务安装完成"
+do_update() {
+    load_config
+    validate_config
+    check_network
     
-    # 询问是否立即启用定时更新
-    echo -n "是否立即启用定时更新？(y/n): "
-    read enable_auto
-    if [ "$enable_auto" = "y" ] || [ "$enable_auto" = "Y" ]; then
-        enable_cron
-    fi
-}
-
-# 卸载服务
-uninstall_service() {
-    echo -n "确定要卸载 DDNS 服务吗？(y/n): "
-    read confirm
-    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-        # 禁用定时任务
-        disable_cron
-        
-        # 删除脚本文件
-        rm -f $SCRIPT_PATH
-        
-        # 删除软链接
-        rm -f /usr/local/bin/cloudflare-ddns
-        
-        # 如果目录为空，删除目录
-        rmdir --ignore-fail-on-non-empty /usr/local/cloudflare-ddns
-        
-        # 清理系统日志中的相关记录
-        if [ -f /var/log/syslog ]; then
-            sed -i '/cloudflare-ddns/d' /var/log/syslog
-        fi
-        
-        echo "DDNS 服务已卸载"
-        echo "如需重新安装，请运行安装脚本"
-        exit 0
+    # 获取IP
+    local ip=$(curl -s http://ipv4.icanhazip.com)
+    [[ -z "$ip" ]] && error "无法获取公网IP"
+    log "当前IP: $ip"
+    
+    # 获取域名ID
+    local zone_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$ZONE_NAME" \
+        -H "X-Auth-Email: $AUTH_EMAIL" \
+        -H "X-Auth-Key: $AUTH_KEY" \
+        -H "Content-Type: application/json" | jq -r '.result[0].id')
+    
+    [[ -z "$zone_id" || "$zone_id" == "null" ]] && error "无法获取域名ID"
+    
+    # 获取记录ID
+    local record_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?name=$RECORD_NAME" \
+        -H "X-Auth-Email: $AUTH_EMAIL" \
+        -H "X-Auth-Key: $AUTH_KEY" \
+        -H "Content-Type: application/json" | jq -r '.result[0].id')
+    
+    [[ -z "$record_id" || "$record_id" == "null" ]] && error "无法获取记录ID"
+    
+    # 更新记录
+    local result=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$record_id" \
+        -H "X-Auth-Email: $AUTH_EMAIL" \
+        -H "X-Auth-Key: $AUTH_KEY" \
+        -H "Content-Type: application/json" \
+        --data "{\"type\":\"A\",\"name\":\"$RECORD_NAME\",\"content\":\"$ip\",\"ttl\":1,\"proxied\":false}")
+    
+    if echo "$result" | jq -e '.success' >/dev/null; then
+        log "DNS记录已更新: $RECORD_NAME -> $ip"
     else
-        echo "取消卸载"
+        error "更新失败: $(echo "$result" | jq -r '.errors[0].message')"
     fi
 }
 
-# 启用定时更新
+# 定时任务管理
 enable_cron() {
     (crontab -l 2>/dev/null | grep -v "$SCRIPT_PATH"; echo "$CRON_JOB") | crontab -
-    echo "已启用定时更新 (每5分钟)"
+    log "已启用自动更新"
 }
 
-# 禁用定时更新
 disable_cron() {
     crontab -l 2>/dev/null | grep -v "$SCRIPT_PATH" | crontab -
-    echo "已禁用定时更新"
+    log "已禁用自动更新"
 }
 
-# 立即更新
-update_now() {
-    $SCRIPT_PATH
-}
-
-# 查看状态
-check_status() {
-    echo "=== 服务状态 ==="
-    if [ -f "$SCRIPT_PATH" ]; then
-        echo "脚本位置: $SCRIPT_PATH"
-        echo "脚本权限: $(ls -l $SCRIPT_PATH)"
-    else
-        echo "脚本未安装"
-    fi
-    
-    echo -n "定时任务: "
-    if crontab -l 2>/dev/null | grep -q "$SCRIPT_PATH"; then
-        echo "已启用"
-    else
-        echo "未启用"
+# 卸载函数
+do_uninstall() {
+    check_root
+    read -p "确定要卸载吗？[y/N] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        disable_cron
+        rm -f "$SCRIPT_PATH" "$CONFIG_FILE"
+        rm -f /usr/local/bin/cloudflare-ddns
+        rmdir --ignore-fail-on-non-empty "$INSTALL_DIR"
+        log "卸载完成"
     fi
 }
 
-# 查看日志
-view_logs() {
-    tail -f /var/log/syslog | grep cloudflare-ddns
-}
-
-# 主循环
-while true; do
-    show_menu
-    read -p "请选择操作 [0-7]: " choice
-    case $choice in
-        1) install_service ;;
-        2) enable_cron ;;
-        3) disable_cron ;;
-        4) update_now ;;
-        5) check_status ;;
-        6) view_logs ;;
-        7) uninstall_service ;;
-        0) exit 0 ;;
-        *) echo "无效选项" ;;
+# 主函数
+main() {
+    case "$1" in
+        install)
+            do_install
+            ;;
+        update)
+            do_update
+            ;;
+        enable)
+            enable_cron
+            ;;
+        disable)
+            disable_cron
+            ;;
+        uninstall)
+            do_uninstall
+            ;;
+        -v|--version)
+            echo "cloudflare-ddns v$VERSION"
+            ;;
+        -h|--help)
+            echo "用法: $(basename $0) <命令>"
+            echo "命令:"
+            echo "  install    安装或重新配置"
+            echo "  update     更新DNS记录"
+            echo "  enable     启用自动更新"
+            echo "  disable    禁用自动更新"
+            echo "  uninstall  卸载服务"
+            ;;
+        *)
+            error "未知命令，使用 -h 查看帮助"
+            ;;
     esac
-    echo "按回车键继续..."
-    read
-done 
+}
+
+main "$@" 
