@@ -97,7 +97,7 @@ tail -f /var/log/syslog | grep cloudflare-ddns
 
 ## 项目地址
 
-- [GitCode 仓库](https://gitcode.com/wanqiu9527/cloudflare_DDNS/blob/main/cloudflare-ddns.sh)
+- [GitCode 仓库](https://github.com/LiAy-admin/cloudflare-ddns)
 
 ## 安全建议
 
