@@ -20,7 +20,7 @@ mkdir -p /usr/local/cloudflare-ddns
 
 # 下载脚本
 echo "正在下载脚本..."
-wget -O /usr/local/cloudflare-ddns/cloudflare-ddns.sh https://gitcode.com/wanqiu9527/cloudflare_DDNS/raw/main/cloudflare-ddns.sh
+wget -O /usr/local/cloudflare-ddns/cloudflare-ddns.sh https://ghp.ci/https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/cloudflare-ddns.sh
 
 # 设置权限
 chmod 700 /usr/local/cloudflare-ddns/cloudflare-ddns.sh
