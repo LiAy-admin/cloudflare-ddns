@@ -7,7 +7,12 @@
 ## 一键安装
 
 ```bash
-wget -O- https://gitcode.com/wanqiu9527/cloudflare_DDNS/raw/main/install.sh | sudo bash
+wget -O- https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/install.sh | sudo bash
+```
+## 国内加速一键安装
+
+```bash
+wget -O- https://ghp.ci/https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/install.sh | sudo bash
 ```
 
 安装完成后，直接运行：
@@ -19,7 +24,12 @@ cloudflare-ddns
 
 1. 下载脚本：
 ```bash
-wget https://gitcode.com/wanqiu9527/cloudflare_DDNS/raw/main/cloudflare-ddns.sh
+wget https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/cloudflare-ddns.sh
+```
+
+1. 国内加速下载脚本：
+```bash
+wget https://ghp.ci/https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/cloudflare-ddns.sh
 ```
 
 2. 添加执行权限：
