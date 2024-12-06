@@ -2,45 +2,18 @@
 
 将动态IP解析到 Cloudflare 的域名上，这是一个用于自动更新 Cloudflare DNS 记录的 Shell 脚本，支持动态 IP 地址更新。
 
-## 一键安装
-
-```bash
-wget -O- https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/cloudflare-ddns.sh | sudo bash -s install
-```
-
-## 国内加速一键安装
-
-```bash
-wget -O- https://ghp.ci/https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/cloudflare-ddns.sh | sudo bash -s install
-```
-
-## 手动安装
+## 安装方法
 
 1. 下载脚本：
-```bash
-wget https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/cloudflare-ddns.sh
-```
-
-   国内加速下载：
 ```bash
 wget https://ghp.ci/https://github.com/LiAy-admin/cloudflare-ddns/releases/download/fc-ddns.sh/cloudflare-ddns.sh
 ```
 
-2. 添加执行权限：
+2. 安装：
 ```bash
 chmod +x cloudflare-ddns.sh
-```
-
-3. 安装服务：
-```bash
 sudo ./cloudflare-ddns.sh install
 ```
-
-## 使用方法
-
-安装完成后，可以：
-1. 直接运行命令：`cloudflare-ddns`
-2. 或运行原始脚本：`/usr/local/cloudflare-ddns/cloudflare-ddns.sh`
 
 ## Cloudflare 配置获取
 
@@ -66,7 +39,7 @@ sudo ./cloudflare-ddns.sh install
 
 ## 常见问题
 
-1. 依赖安装：
+1. 依赖安装
 ```bash
 # 安装必要的工具
 apt update
